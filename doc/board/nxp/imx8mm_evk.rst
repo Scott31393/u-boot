@@ -44,12 +44,46 @@ Build U-Boot
    $ make imx8mm_evk_defconfig
    $ make
 
-Burn the flash.bin to MicroSD card offset 33KB:
+Booting from the SD card
+------------------------
+
+Burn the flash.bin to MicroSD card offset 33KB and u-boot.itb to
+offset 384kB.
 
 .. code-block:: bash
 
    $sudo dd if=flash.bin of=/dev/sd[x] bs=1024 seek=33 conv=notrunc
 
-Boot
-----
-Set Boot switch to SD boot
+Booting from the eMMC
+---------------------
+
+Power off the board and put the boot mode switches
+to Download Mode.
+
+Connect a USB cable between the TypeC port 1 and the host PC.
+
+Load flash.bin via the 'uuu' tool:
+
+.. code-block:: bash
+
+   $ sudo uuu flash.bin
+
+Load u-boot.itb via the 'uuu' tool:
+
+.. code-block:: bash
+
+   $ sudo uuu SDPV: write -f u-boot.itb -addr 0x42000000
+   $ sudo uuu SDPV: jump -addr 0x42000000
+
+Then U-Boot will be launched.
+
+Run the ums tool to flash the eMMC:
+
+.. code-block:: bash
+
+   => ums 0 mmc 2
+   => sudo dd if=flash.bin of=/dev/sd[x] bs=1024 seek=33; sync
+   => sudo dd if=u-boot.itb of=/dev/sd[x] bs=1024 seek=384; sync
+
+Power off the board. Put the boot switches to eMMC boot mode
+and power it on.
