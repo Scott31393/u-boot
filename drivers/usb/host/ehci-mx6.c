@@ -554,27 +554,6 @@ static int ehci_usb_phy_mode(struct udevice *dev)
 	return 0;
 }
 
-static int ehci_usb_of_to_plat(struct udevice *dev)
-{
-	struct usb_plat *plat = dev_get_plat(dev);
-	enum usb_dr_mode dr_mode;
-
-	dr_mode = usb_get_dr_mode(dev_ofnode(dev));
-
-	switch (dr_mode) {
-	case USB_DR_MODE_HOST:
-		plat->init_type = USB_INIT_HOST;
-		break;
-	case USB_DR_MODE_PERIPHERAL:
-		plat->init_type = USB_INIT_DEVICE;
-		break;
-	default:
-		plat->init_type = USB_INIT_UNKNOWN;
-	};
-
-	return 0;
-}
-
 static int mx6_parse_dt_addrs(struct udevice *dev)
 {
 #if !defined(CONFIG_PHY)
@@ -636,7 +615,6 @@ static int ehci_usb_probe(struct udevice *dev)
 	struct usb_plat *plat = dev_get_plat(dev);
 	struct usb_ehci *ehci = dev_read_addr_ptr(dev);
 	struct ehci_mx6_priv_data *priv = dev_get_priv(dev);
-	enum usb_init_type type = plat->init_type;
 	struct ehci_hccr *hccr;
 	struct ehci_hcor *hcor;
 	int ret;
@@ -654,7 +632,6 @@ static int ehci_usb_probe(struct udevice *dev)
 		return ret;
 
 	priv->ehci = ehci;
-	priv->init_type = type;
 	priv->phy_type = usb_get_phy_mode(dev_ofnode(dev));
 
 #if CONFIG_IS_ENABLED(CLK)
@@ -671,19 +648,20 @@ static int ehci_usb_probe(struct udevice *dev)
 	mdelay(1);
 #endif
 
-	/*
-	 * If the device tree didn't specify host or device,
-	 * the default is USB_INIT_UNKNOWN, so we need to check
-	 * the register. For imx8mm and imx8mn, the clocks need to be
-	 * running first, so we defer the check until they are.
-	 */
-	if (priv->init_type == USB_INIT_UNKNOWN) {
+	switch (usb_get_dr_mode(dev_ofnode(dev))) {
+	case USB_DR_MODE_HOST:
+		plat->init_type = USB_INIT_HOST;
+		break;
+	case USB_DR_MODE_PERIPHERAL:
+		plat->init_type = USB_INIT_DEVICE;
+		break;
+	case USB_DR_MODE_OTG:
+	case USB_DR_MODE_UNKNOWN:
 		ret = ehci_usb_phy_mode(dev);
 		if (ret)
-			goto err_clk;
-		else
-			priv->init_type = plat->init_type;
-	}
+			return ret;
+	};
+	priv->init_type = plat->init_type;
 
 #if CONFIG_IS_ENABLED(DM_REGULATOR)
 	ret = device_get_supply_regulator(dev, "vbus-supply",
@@ -708,7 +686,7 @@ static int ehci_usb_probe(struct udevice *dev)
 #if CONFIG_IS_ENABLED(DM_REGULATOR)
 	if (priv->vbus_supply) {
 		ret = regulator_set_enable(priv->vbus_supply,
-					   (type == USB_INIT_DEVICE) ?
+					   (priv->init_type == USB_INIT_DEVICE) ?
 					   false : true);
 		if (ret && ret != -ENOSYS) {
 			printf("Error enabling VBUS supply (ret=%i)\n", ret);
@@ -793,7 +771,6 @@ U_BOOT_DRIVER(usb_mx6) = {
 	.name	= "ehci_mx6",
 	.id	= UCLASS_USB,
 	.of_match = mx6_usb_ids,
-	.of_to_plat = ehci_usb_of_to_plat,
 	.probe	= ehci_usb_probe,
 	.remove = ehci_usb_remove,
 	.ops	= &ehci_usb_ops,
