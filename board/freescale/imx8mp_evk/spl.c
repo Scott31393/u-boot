@@ -27,7 +27,12 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int spl_board_boot_device(enum boot_device boot_dev_spl)
 {
-	return BOOT_DEVICE_BOOTROM;
+	switch (boot_dev_spl) {
+	case USB_BOOT:
+		return BOOT_DEVICE_BOARD;
+	default:
+		return BOOT_DEVICE_BOOTROM;
+	}
 }
 
 void spl_dram_init(void)
